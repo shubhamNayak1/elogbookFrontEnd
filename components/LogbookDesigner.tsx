@@ -1,21 +1,34 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ColumnType, LogbookStatus, LogbookColumn, LogbookTemplate } from '../types';
 import { api } from '../services/api';
-// Added Database to the imports to fix the missing component error
 import { Plus, Trash2, Save, X, MoveUp, MoveDown, Info, Loader2, Database } from 'lucide-react';
 
 interface LogbookDesignerProps {
+  initialTemplate?: LogbookTemplate | null;
   onSave: () => void;
 }
 
-const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
+const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSave }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [columns, setColumns] = useState<LogbookColumn[]>([]);
   const [reason, setReason] = useState('');
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize form when editing
+  useEffect(() => {
+    if (initialTemplate) {
+      setName(initialTemplate.name);
+      setDescription(initialTemplate.description);
+      setColumns(initialTemplate.columns);
+    } else {
+      setName('');
+      setDescription('');
+      setColumns([]);
+    }
+  }, [initialTemplate]);
 
   const addColumn = () => {
     const newCol: LogbookColumn = {
@@ -52,6 +65,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
     setIsSaving(true);
     try {
       await api.saveLogbook({
+        id: initialTemplate?.id, // Preserve ID if editing
         name,
         description,
         status: LogbookStatus.ACTIVE,
@@ -72,9 +86,19 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+            <Database size={20} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">{initialTemplate ? 'Update Logbook Template' : 'Create New Logbook Template'}</h2>
+            <p className="text-xs text-slate-400 font-medium">Define the structure and metadata for GxP data collection</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Logbook Identity</label>
             <input 
@@ -82,7 +106,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Equipment Cleaning Log"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-sm transition-all"
             />
           </div>
           <div className="space-y-2">
@@ -92,7 +116,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="System or Area purpose"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-sm transition-all"
             />
           </div>
         </div>
@@ -127,7 +151,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
                     type="text" 
                     value={col.label}
                     onChange={(e) => updateColumn(col.id, { label: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium"
                   />
                 </div>
 
@@ -136,7 +160,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
                   <select 
                     value={col.type}
                     onChange={(e) => updateColumn(col.id, { type: e.target.value as ColumnType })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm appearance-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm appearance-none font-medium"
                   >
                     {Object.values(ColumnType).map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
@@ -176,7 +200,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
             onClick={() => setShowReasonModal(true)}
             className="flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 disabled:shadow-none transition-all"
           >
-            <Save size={18} /> Commit Template
+            <Save size={18} /> {initialTemplate ? 'Apply Updates' : 'Commit Template'}
           </button>
         </div>
       </div>
@@ -190,7 +214,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
               <h3 className="text-xl font-black tracking-tight">E-Signature Verification</h3>
             </div>
             <p className="text-slate-500 mb-6 text-sm leading-relaxed">
-              Pursuant to <span className="text-slate-800 font-bold">21 CFR Part 11</span>, providing a justification is mandatory for this template modification.
+              Pursuant to <span className="text-slate-800 font-bold">21 CFR Part 11</span>, providing a justification is mandatory for this template {initialTemplate ? 'modification' : 'creation'}.
             </p>
             <textarea
               value={reason}
@@ -204,7 +228,7 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ onSave }) => {
                 onClick={() => setShowReasonModal(false)}
                 className="flex-1 py-4 font-black text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
               >
-                Abuse Action
+                Go Back
               </button>
               <button 
                 disabled={!reason.trim() || isSaving}

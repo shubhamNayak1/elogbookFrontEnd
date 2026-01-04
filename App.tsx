@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState | null>(null);
   const [currentView, setCurrentView] = useState<'DASHBOARD' | 'DESIGNER' | 'LOGBOOKS' | 'AUDIT' | 'REPORTS' | 'ENTRY_FORM'>('DASHBOARD');
   const [selectedLogbook, setSelectedLogbook] = useState<LogbookTemplate | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<LogbookTemplate | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -43,7 +44,13 @@ const App: React.FC = () => {
   }
 
   const navigateTo = (view: typeof currentView, data?: any) => {
-    if (view === 'ENTRY_FORM') setSelectedLogbook(data);
+    if (view === 'ENTRY_FORM') {
+      setSelectedLogbook(data);
+    } else if (view === 'DESIGNER') {
+      // If data is passed, we are editing. Otherwise, it's a new template.
+      setEditingTemplate(data || null);
+    }
+    
     setCurrentView(view);
     setSidebarOpen(false);
   };
@@ -59,10 +66,17 @@ const App: React.FC = () => {
         return <Dashboard state={appState} navigateTo={navigateTo} />;
       case 'DESIGNER':
         return appState.currentUser?.role === UserRole.ADMIN 
-          ? <LogbookDesigner onSave={refreshState} /> 
+          ? <LogbookDesigner 
+              initialTemplate={editingTemplate} 
+              onSave={async () => { 
+                setEditingTemplate(null);
+                await refreshState(); 
+                navigateTo('LOGBOOKS');
+              }} 
+            /> 
           : <div className="p-8 text-red-500 font-bold">Access Denied: Administrator role required.</div>;
       case 'LOGBOOKS':
-        return <LogbookEntryList logbooks={appState.logbooks} navigateTo={navigateTo} />;
+        return <LogbookEntryList user={appState.currentUser} logbooks={appState.logbooks} navigateTo={navigateTo} />;
       case 'ENTRY_FORM':
         return selectedLogbook 
           ? <EntryForm template={selectedLogbook} onSave={async () => { await refreshState(); navigateTo('LOGBOOKS'); }} onCancel={() => navigateTo('LOGBOOKS')} />
@@ -115,6 +129,9 @@ const App: React.FC = () => {
                 {currentView === 'AUDIT' && <History className="text-indigo-600" />}
                 {currentView === 'REPORTS' && <BarChart3 className="text-indigo-600" />}
                 {currentView.replace('_', ' ')}
+                {currentView === 'DESIGNER' && editingTemplate && (
+                  <span className="text-indigo-400 text-sm font-medium ml-2">/ Editing: {editingTemplate.name}</span>
+                )}
               </h1>
               <p className="text-slate-500 text-sm mt-1">
                 Active Session: <span className="font-semibold text-slate-700">{appState.currentUser.fullName}</span>
