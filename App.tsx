@@ -10,11 +10,12 @@ import LogbookEntryList from './components/LogbookEntryList';
 import EntryForm from './components/EntryForm';
 import AuditLogView from './components/AuditLogView';
 import ReportingDashboard from './components/ReportingDashboard';
-import { Shield, Layout, ClipboardList, History, BarChart3, Menu, X, Database, Loader2 } from 'lucide-react';
+import UserManagement from './components/UserManagement';
+import { Shield, Layout, ClipboardList, History, BarChart3, Menu, X, Database, Loader2, Users } from 'lucide-react';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState | null>(null);
-  const [currentView, setCurrentView] = useState<'DASHBOARD' | 'DESIGNER' | 'LOGBOOKS' | 'AUDIT' | 'REPORTS' | 'ENTRY_FORM'>('DASHBOARD');
+  const [currentView, setCurrentView] = useState<'DASHBOARD' | 'DESIGNER' | 'LOGBOOKS' | 'AUDIT' | 'REPORTS' | 'ENTRY_FORM' | 'USERS'>('DASHBOARD');
   const [selectedLogbook, setSelectedLogbook] = useState<LogbookTemplate | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<LogbookTemplate | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -60,7 +61,6 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    // Current user is guaranteed to exist here
     const user = appState.currentUser!;
 
     switch (currentView) {
@@ -87,6 +87,10 @@ const App: React.FC = () => {
         return <AuditLogView user={user} auditLogs={appState.auditLogs} />;
       case 'REPORTS':
         return <ReportingDashboard state={appState} />;
+      case 'USERS':
+        return user.role === UserRole.ADMIN 
+          ? <UserManagement users={appState.users} onUpdate={refreshState} />
+          : <div className="p-8 text-red-500 font-bold">Access Denied.</div>;
       default:
         return <Dashboard state={appState} navigateTo={navigateTo} />;
     }
@@ -124,15 +128,16 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight capitalize">
                 {currentView === 'DASHBOARD' && <Layout className="text-indigo-600" />}
                 {currentView === 'DESIGNER' && <Database className="text-indigo-600" />}
                 {currentView === 'LOGBOOKS' && <ClipboardList className="text-indigo-600" />}
                 {currentView === 'AUDIT' && <History className="text-indigo-600" />}
                 {currentView === 'REPORTS' && <BarChart3 className="text-indigo-600" />}
-                {currentView.replace('_', ' ')}
+                {currentView === 'USERS' && <Users className="text-indigo-600" />}
+                {currentView.replace('_', ' ').toLowerCase()}
                 {currentView === 'DESIGNER' && editingTemplate && (
-                  <span className="text-indigo-400 text-sm font-medium ml-2">/ Editing: {editingTemplate.name}</span>
+                  <span className="text-indigo-400 text-sm font-medium ml-2">/ editing: {editingTemplate.name}</span>
                 )}
               </h1>
               <p className="text-slate-500 text-sm mt-1">

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User, UserRole } from '../types';
-import { Layout, ClipboardList, Database, History, BarChart3, LogOut, ShieldCheck } from 'lucide-react';
+import { Layout, ClipboardList, Database, History, BarChart3, LogOut, ShieldCheck, Users } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, user, onNavigate
     { id: 'DASHBOARD', label: 'Dashboard', icon: Layout },
     { id: 'LOGBOOKS', label: 'Logbooks', icon: ClipboardList },
     { id: 'DESIGNER', label: 'Template Designer', icon: Database, adminOnly: true },
+    { id: 'USERS', label: 'User Management', icon: Users, adminOnly: true },
     { id: 'REPORTS', label: 'Reporting', icon: BarChart3 },
     { id: 'AUDIT', label: 'Audit Trail', icon: History },
   ];

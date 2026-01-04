@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ColumnType, LogbookStatus, LogbookColumn, LogbookTemplate } from '../types';
 import { api } from '../services/api';
-import { Plus, Trash2, Save, X, MoveUp, MoveDown, Info, Loader2, Database } from 'lucide-react';
+import { Plus, Trash2, Save, X, MoveUp, MoveDown, Info, Loader2, Database, Lock } from 'lucide-react';
 
 interface LogbookDesignerProps {
   initialTemplate?: LogbookTemplate | null;
@@ -17,16 +17,39 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize form when editing
+  // System-enforced columns - using 'Time' label but 'DATE' type as requested
+  const getSystemColumns = (): LogbookColumn[] => [
+    {
+      id: 'sys_col_time',
+      label: 'Time',
+      key: 'time',
+      type: ColumnType.DATE,
+      isMandatory: true,
+      displayOrder: -1,
+      isSystemManaged: true
+    }
+  ];
+
+  // Initialize form when editing or creating
   useEffect(() => {
     if (initialTemplate) {
       setName(initialTemplate.name);
       setDescription(initialTemplate.description);
-      setColumns(initialTemplate.columns);
+      const existingCols = initialTemplate.columns;
+      const hasTime = existingCols.some(c => c.key === 'time');
+      if (!hasTime) {
+        setColumns([...getSystemColumns(), ...existingCols]);
+      } else {
+        // Migration: ensure existing time columns use the specified label and type if they are system managed
+        const updatedCols = existingCols.map(c => 
+          c.key === 'time' && c.isSystemManaged ? { ...c, label: 'Time', type: ColumnType.DATE } : c
+        );
+        setColumns(updatedCols);
+      }
     } else {
       setName('');
       setDescription('');
-      setColumns([]);
+      setColumns(getSystemColumns());
     }
   }, [initialTemplate]);
 
@@ -43,19 +66,32 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
   };
 
   const removeColumn = (id: string) => {
+    const col = columns.find(c => c.id === id);
+    if (col?.isSystemManaged) return;
     setColumns(columns.filter(c => c.id !== id));
   };
 
   const updateColumn = (id: string, updates: Partial<LogbookColumn>) => {
-    setColumns(columns.map(c => c.id === id ? { ...c, ...updates } : c));
+    setColumns(columns.map(c => {
+      if (c.id === id) {
+        if (c.isSystemManaged) return c;
+        return { ...c, ...updates };
+      }
+      return c;
+    }));
   };
 
   const moveColumn = (index: number, direction: 'UP' | 'DOWN') => {
     const newCols = [...columns];
     const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    
+    if (newCols[index].isSystemManaged || (targetIndex >= 0 && targetIndex < newCols.length && newCols[targetIndex].isSystemManaged)) {
+      return; 
+    }
+
     if (targetIndex >= 0 && targetIndex < newCols.length) {
       [newCols[index], newCols[targetIndex]] = [newCols[targetIndex], newCols[index]];
-      setColumns(newCols.map((c, i) => ({ ...c, displayOrder: i })));
+      setColumns(newCols.map((c, i) => ({ ...c, displayOrder: c.isSystemManaged ? -1 : i })));
     }
   };
 
@@ -65,11 +101,11 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
     setIsSaving(true);
     try {
       await api.saveLogbook({
-        id: initialTemplate?.id, // Preserve ID if editing
+        id: initialTemplate?.id,
         name,
         description,
         status: LogbookStatus.ACTIVE,
-        columns
+        columns: columns.sort((a, b) => a.displayOrder - b.displayOrder)
       }, reason);
       
       onSave();
@@ -84,6 +120,11 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
       setIsSaving(false);
     }
   };
+
+  // Filter out TIME and DATETIME from the selection as they are deprecated in the UI
+  const allowedColumnTypes = Object.values(ColumnType).filter(
+    type => type !== ColumnType.TIME && type !== ColumnType.DATETIME
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -139,19 +180,31 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
 
           <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
             {columns.map((col, idx) => (
-              <div key={col.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-wrap gap-4 items-end animate-in fade-in slide-in-from-top-2 duration-200">
+              <div key={col.id} className={`p-4 rounded-2xl border flex flex-wrap gap-4 items-end animate-in fade-in slide-in-from-top-2 duration-200 ${col.isSystemManaged ? 'bg-slate-50 border-slate-200 opacity-80' : 'bg-white border-slate-100'}`}>
                 <div className="flex gap-1 mb-auto pt-1">
-                  <button onClick={() => moveColumn(idx, 'UP')} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors"><MoveUp size={14}/></button>
-                  <button onClick={() => moveColumn(idx, 'DOWN')} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors"><MoveDown size={14}/></button>
+                  {!col.isSystemManaged && (
+                    <>
+                      <button onClick={() => moveColumn(idx, 'UP')} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors"><MoveUp size={14}/></button>
+                      <button onClick={() => moveColumn(idx, 'DOWN')} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors"><MoveDown size={14}/></button>
+                    </>
+                  )}
+                  {col.isSystemManaged && (
+                    <div className="p-1 text-indigo-400" title="Locked by System">
+                      <Lock size={14} />
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex-1 min-w-[200px] space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Attribute Label</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter flex items-center gap-1">
+                    Attribute Label {col.isSystemManaged && <span className="text-[8px] bg-indigo-100 text-indigo-600 px-1 rounded">SYSTEM</span>}
+                  </label>
                   <input 
                     type="text" 
                     value={col.label}
+                    disabled={col.isSystemManaged}
                     onChange={(e) => updateColumn(col.id, { label: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium"
+                    className={`w-full px-3 py-2 rounded-lg border text-sm font-medium ${col.isSystemManaged ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200'}`}
                   />
                 </div>
 
@@ -159,10 +212,13 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Data Type</label>
                   <select 
                     value={col.type}
+                    disabled={col.isSystemManaged}
                     onChange={(e) => updateColumn(col.id, { type: e.target.value as ColumnType })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm appearance-none font-medium"
+                    className={`w-full px-3 py-2 rounded-lg border text-sm appearance-none font-medium ${col.isSystemManaged ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200'}`}
                   >
-                    {Object.values(ColumnType).map(t => <option key={t} value={t}>{t}</option>)}
+                    {allowedColumnTypes.map(t => (
+                      <option key={t} value={t}>{t === ColumnType.DATE ? 'DATE + TIME' : t}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -171,26 +227,27 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
                     type="checkbox" 
                     id={`mand_${col.id}`}
                     checked={col.isMandatory}
+                    disabled={col.isSystemManaged}
                     onChange={(e) => updateColumn(col.id, { isMandatory: e.target.checked })}
-                    className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                    className={`w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 ${col.isSystemManaged ? 'opacity-50 cursor-not-allowed' : ''}`}
                   />
                   <label htmlFor={`mand_${col.id}`} className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Mandatory</label>
                 </div>
 
-                <button 
-                  onClick={() => removeColumn(col.id)}
-                  className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                >
-                  <Trash2 size={18} />
-                </button>
+                {!col.isSystemManaged ? (
+                  <button 
+                    onClick={() => removeColumn(col.id)}
+                    className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                ) : (
+                  <div className="p-2.5 text-slate-200">
+                    <Trash2 size={18} className="opacity-30" />
+                  </div>
+                )}
               </div>
             ))}
-            {columns.length === 0 && (
-              <div className="py-16 text-center text-slate-300 border-2 border-dashed border-slate-100 rounded-3xl">
-                <Database size={40} className="mx-auto mb-3 opacity-20" />
-                <p className="text-sm font-medium">Click "Add Column" to define the logbook structure</p>
-              </div>
-            )}
           </div>
         </div>
 
@@ -205,7 +262,6 @@ const LogbookDesigner: React.FC<LogbookDesignerProps> = ({ initialTemplate, onSa
         </div>
       </div>
 
-      {/* Audit Reason Modal */}
       {showReasonModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white max-w-lg w-full rounded-3xl p-8 shadow-2xl border border-slate-100">

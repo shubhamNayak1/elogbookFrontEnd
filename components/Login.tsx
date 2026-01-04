@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
-import { api, MOCK_USERS } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
+import { User } from '../types';
 import { ShieldAlert, LogIn, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface LoginProps {
@@ -8,18 +9,29 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUsername, setSelectedUsername] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const state = await api.getState();
+      setAvailableUsers(state.users);
+      setIsLoading(false);
+    };
+    fetchUsers();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedUsername && !isLoading) {
-      setIsLoading(true);
+    if (selectedUsername && !isLoggingIn) {
+      setIsLoggingIn(true);
       const user = await api.login(selectedUsername);
       if (user) {
         onLogin();
       } else {
-        setIsLoading(false);
+        setIsLoggingIn(false);
       }
     }
   };
@@ -39,46 +51,54 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Select Credentials</label>
-              <div className="grid grid-cols-1 gap-3">
-                {MOCK_USERS.map((user) => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => setSelectedUsername(user.username)}
-                    className={`
-                      p-4 rounded-2xl border-2 text-left transition-all relative
-                      ${selectedUsername === user.username 
-                        ? 'border-indigo-600 bg-indigo-50 shadow-sm' 
-                        : 'border-slate-50 hover:border-slate-200 bg-slate-50/50'}
-                      ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-slate-900">{user.fullName}</p>
-                        <p className="text-[10px] text-indigo-500 uppercase font-bold tracking-wider mt-0.5">{user.role}</p>
+              
+              {isLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-4 text-slate-400">
+                  <Loader2 className="animate-spin" size={24} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Initializing Secure Node...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-hide">
+                  {availableUsers.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      disabled={isLoggingIn}
+                      onClick={() => setSelectedUsername(user.username)}
+                      className={`
+                        p-4 rounded-2xl border-2 text-left transition-all relative
+                        ${selectedUsername === user.username 
+                          ? 'border-indigo-600 bg-indigo-50 shadow-sm' 
+                          : 'border-slate-50 hover:border-slate-200 bg-slate-50/50'}
+                        ${isLoggingIn ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-slate-900">{user.fullName}</p>
+                          <p className="text-[10px] text-indigo-500 uppercase font-bold tracking-wider mt-0.5">{user.role}</p>
+                        </div>
+                        {selectedUsername === user.username && (
+                          <CheckCircle2 size={24} className="text-indigo-600" />
+                        )}
                       </div>
-                      {selectedUsername === user.username && (
-                        <CheckCircle2 size={24} className="text-indigo-600" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={!selectedUsername || isLoading}
+              disabled={!selectedUsername || isLoggingIn || isLoading}
               className={`
                 w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all
-                ${selectedUsername && !isLoading 
+                ${selectedUsername && !isLoggingIn 
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100' 
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
               `}
             >
-              {isLoading ? (
+              {isLoggingIn ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
                   Authenticating...

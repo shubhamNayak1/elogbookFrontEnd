@@ -6,23 +6,28 @@ const NETWORK_DELAY = 600;
 
 const simulateNetworkDelay = () => new Promise(resolve => setTimeout(resolve, NETWORK_DELAY));
 
+// Mock Users for initialization
+const INITIAL_USERS: User[] = [
+  { id: 'u1', username: 'admin', role: UserRole.ADMIN, fullName: 'System Administrator', createdAt: new Date().toISOString() },
+  { id: 'u2', username: 'jdoe', role: UserRole.USER, fullName: 'John Doe (Analyst)', createdAt: new Date().toISOString() }
+];
+
 const INITIAL_STATE: AppState = {
   currentUser: null,
+  users: INITIAL_USERS,
   logbooks: [],
   entries: [],
   auditLogs: []
 };
 
-// Mock Users
-export const MOCK_USERS: User[] = [
-  { id: 'u1', username: 'admin', role: UserRole.ADMIN, fullName: 'System Administrator' },
-  { id: 'u2', username: 'jdoe', role: UserRole.USER, fullName: 'John Doe (Analyst)' }
-];
-
 export const api = {
   private_getState: (): AppState => {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : INITIAL_STATE;
+    if (!data) return INITIAL_STATE;
+    const parsed = JSON.parse(data);
+    // Ensure users array exists in migration from older state
+    if (!parsed.users) parsed.users = INITIAL_USERS;
+    return parsed;
   },
 
   private_saveState: (state: AppState) => {
@@ -32,6 +37,11 @@ export const api = {
   getState: async (): Promise<AppState> => {
     await simulateNetworkDelay();
     return api.private_getState();
+  },
+
+  getUsers: async (): Promise<User[]> => {
+    await simulateNetworkDelay();
+    return api.private_getState().users;
   },
 
   createAudit: async (
@@ -65,9 +75,9 @@ export const api = {
 
   login: async (username: string): Promise<User | null> => {
     await simulateNetworkDelay();
-    const user = MOCK_USERS.find(u => u.username === username);
+    const state = api.private_getState();
+    const user = state.users.find(u => u.username === username);
     if (user) {
-      const state = api.private_getState();
       state.currentUser = user;
       api.private_saveState(state);
       await api.createAudit('LOGIN', 'USER', user.id, null, { username }, 'Standard Login');
@@ -81,6 +91,38 @@ export const api = {
     const state = api.private_getState();
     state.currentUser = null;
     api.private_saveState(state);
+  },
+
+  saveUser: async (userData: Partial<User>, reason: string): Promise<User> => {
+    await simulateNetworkDelay();
+    const state = api.private_getState();
+    const isNew = !userData.id;
+    const id = userData.id || `u_${Date.now()}`;
+
+    const newUser: User = {
+      id,
+      username: userData.username!,
+      fullName: userData.fullName!,
+      role: userData.role || UserRole.USER,
+      createdAt: userData.createdAt || new Date().toISOString()
+    };
+
+    let oldValue = null;
+    if (isNew) {
+      // Check if username already exists
+      if (state.users.some(u => u.username === newUser.username)) {
+        throw new Error('Username already exists in system');
+      }
+      state.users.push(newUser);
+    } else {
+      const index = state.users.findIndex(u => u.id === id);
+      oldValue = { ...state.users[index] };
+      state.users[index] = newUser;
+    }
+
+    api.private_saveState(state);
+    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'USER_ACCOUNT', id, oldValue, newUser, reason);
+    return newUser;
   },
 
   saveLogbook: async (template: Partial<LogbookTemplate>, reason: string): Promise<LogbookTemplate> => {

@@ -8,6 +8,8 @@ export enum ColumnType {
   TEXT = 'TEXT',
   NUMBER = 'NUMBER',
   DATE = 'DATE',
+  TIME = 'TIME',
+  DATETIME = 'DATETIME',
   DROPDOWN = 'DROPDOWN',
   BOOLEAN = 'BOOLEAN'
 }
@@ -23,6 +25,7 @@ export interface User {
   username: string;
   role: UserRole;
   fullName: string;
+  createdAt?: string;
 }
 
 export interface LogbookColumn {
@@ -33,6 +36,7 @@ export interface LogbookColumn {
   isMandatory: boolean;
   options?: string[]; // For DROPDOWN
   displayOrder: number;
+  isSystemManaged?: boolean; // New: indicates a field that cannot be edited or deleted
 }
 
 export interface LogbookTemplate {
@@ -70,6 +74,7 @@ export interface AuditRecord {
 
 export interface AppState {
   currentUser: User | null;
+  users: User[];
   logbooks: LogbookTemplate[];
   entries: LogbookEntry[];
   auditLogs: AuditRecord[];
