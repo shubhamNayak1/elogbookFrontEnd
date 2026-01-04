@@ -47,7 +47,6 @@ const App: React.FC = () => {
     if (view === 'ENTRY_FORM') {
       setSelectedLogbook(data);
     } else if (view === 'DESIGNER') {
-      // If data is passed, we are editing. Otherwise, it's a new template.
       setEditingTemplate(data || null);
     }
     
@@ -61,11 +60,14 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // Current user is guaranteed to exist here
+    const user = appState.currentUser!;
+
     switch (currentView) {
       case 'DASHBOARD':
         return <Dashboard state={appState} navigateTo={navigateTo} />;
       case 'DESIGNER':
-        return appState.currentUser?.role === UserRole.ADMIN 
+        return user.role === UserRole.ADMIN 
           ? <LogbookDesigner 
               initialTemplate={editingTemplate} 
               onSave={async () => { 
@@ -76,13 +78,13 @@ const App: React.FC = () => {
             /> 
           : <div className="p-8 text-red-500 font-bold">Access Denied: Administrator role required.</div>;
       case 'LOGBOOKS':
-        return <LogbookEntryList user={appState.currentUser} logbooks={appState.logbooks} navigateTo={navigateTo} />;
+        return <LogbookEntryList user={user} logbooks={appState.logbooks} navigateTo={navigateTo} />;
       case 'ENTRY_FORM':
         return selectedLogbook 
           ? <EntryForm template={selectedLogbook} onSave={async () => { await refreshState(); navigateTo('LOGBOOKS'); }} onCancel={() => navigateTo('LOGBOOKS')} />
           : <div>No Logbook Selected</div>;
       case 'AUDIT':
-        return <AuditLogView auditLogs={appState.auditLogs} />;
+        return <AuditLogView user={user} auditLogs={appState.auditLogs} />;
       case 'REPORTS':
         return <ReportingDashboard state={appState} />;
       default:

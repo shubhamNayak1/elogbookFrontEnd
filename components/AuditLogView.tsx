@@ -1,42 +1,61 @@
 
 import React, { useState } from 'react';
-import { AuditRecord } from '../types';
-import { Search, Eye, Filter, ArrowUpDown } from 'lucide-react';
+import { AuditRecord, User, UserRole } from '../types';
+import { Search, Eye, Filter, ArrowUpDown, UserCheck, ShieldCheck } from 'lucide-react';
 
 interface AuditLogViewProps {
+  user: User;
   auditLogs: AuditRecord[];
 }
 
-const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
+const AuditLogView: React.FC<AuditLogViewProps> = ({ user, auditLogs }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const isAdmin = user.role === UserRole.ADMIN;
 
-  const filteredLogs = auditLogs.filter(log => 
+  // Filter based on role first (Security requirement)
+  const accessibleLogs = isAdmin 
+    ? auditLogs 
+    : auditLogs.filter(log => log.userId === user.id);
+
+  // Then apply search filter
+  const filteredLogs = accessibleLogs.filter(log => 
     log.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.entityType.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.reason.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center gap-4">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center gap-4 shadow-sm">
         <div className="flex-1 flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 w-full">
           <Search size={20} className="text-slate-400" />
           <input 
             type="text" 
-            placeholder="Search audit trail by user, entity or reason..." 
+            placeholder={isAdmin ? "Search all system activity..." : "Search your personal activity..."}
             className="bg-transparent w-full outline-none text-sm font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
-            <Filter size={16} /> Filters
-          </button>
-          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
-            <ArrowUpDown size={16} /> Sort
-          </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* Data Context Badge */}
+          <div className={`
+            flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest
+            ${isAdmin ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-green-50 border-green-100 text-green-600'}
+          `}>
+            {isAdmin ? <ShieldCheck size={14} /> : <UserCheck size={14} />}
+            {isAdmin ? 'System View' : 'Personal Records Only'}
+          </div>
+          
+          <div className="flex gap-2 flex-1 md:flex-none">
+            <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+              <Filter size={16} /> Filters
+            </button>
+            <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+              <ArrowUpDown size={16} /> Sort
+            </button>
+          </div>
         </div>
       </div>
 
@@ -95,7 +114,15 @@ const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
               {filteredLogs.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                    No audit records found matching your search.
+                    <div className="flex flex-col items-center gap-2">
+                      <Search size={24} className="opacity-20" />
+                      <p className="text-sm">No audit records found matching your search.</p>
+                      {!isAdmin && accessibleLogs.length === 0 && (
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                          You haven't performed any signable actions yet.
+                        </p>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
