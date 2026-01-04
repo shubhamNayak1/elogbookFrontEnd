@@ -1,0 +1,5 @@
+{
+  "name": "PharmaTrack eLogbook",
+  "description": "A GxP-compliant Pharmaceutical eLogbook system featuring dynamic logbook templates, electronic signatures, audit trails (21 CFR Part 11), and AI-driven reporting.",
+  "requestFramePermissions": []
+}
