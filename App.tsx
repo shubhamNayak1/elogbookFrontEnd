@@ -10,21 +10,33 @@ import LogbookEntryList from './components/LogbookEntryList';
 import EntryForm from './components/EntryForm';
 import AuditLogView from './components/AuditLogView';
 import ReportingDashboard from './components/ReportingDashboard';
-import { Shield, Layout, ClipboardList, History, BarChart3, Menu, X, Database } from 'lucide-react';
+import { Shield, Layout, ClipboardList, History, BarChart3, Menu, X, Database, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>(api.getState());
+  const [appState, setAppState] = useState<AppState | null>(null);
   const [currentView, setCurrentView] = useState<'DASHBOARD' | 'DESIGNER' | 'LOGBOOKS' | 'AUDIT' | 'REPORTS' | 'ENTRY_FORM'>('DASHBOARD');
   const [selectedLogbook, setSelectedLogbook] = useState<LogbookTemplate | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const refreshState = useCallback(() => {
-    setAppState(api.getState());
+  const refreshState = useCallback(async () => {
+    setIsRefreshing(true);
+    const state = await api.getState();
+    setAppState(state);
+    setIsRefreshing(false);
   }, []);
 
   useEffect(() => {
     refreshState();
   }, [refreshState]);
+
+  if (!appState) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
 
   if (!appState.currentUser) {
     return <Login onLogin={refreshState} />;
@@ -36,9 +48,9 @@ const App: React.FC = () => {
     setSidebarOpen(false);
   };
 
-  const handleLogout = () => {
-    api.logout();
-    refreshState();
+  const handleLogout = async () => {
+    await api.logout();
+    await refreshState();
   };
 
   const renderContent = () => {
@@ -48,12 +60,12 @@ const App: React.FC = () => {
       case 'DESIGNER':
         return appState.currentUser?.role === UserRole.ADMIN 
           ? <LogbookDesigner onSave={refreshState} /> 
-          : <div className="p-8 text-red-500">Access Denied</div>;
+          : <div className="p-8 text-red-500 font-bold">Access Denied: Administrator role required.</div>;
       case 'LOGBOOKS':
         return <LogbookEntryList logbooks={appState.logbooks} navigateTo={navigateTo} />;
       case 'ENTRY_FORM':
         return selectedLogbook 
-          ? <EntryForm template={selectedLogbook} onSave={() => { refreshState(); navigateTo('LOGBOOKS'); }} onCancel={() => navigateTo('LOGBOOKS')} />
+          ? <EntryForm template={selectedLogbook} onSave={async () => { await refreshState(); navigateTo('LOGBOOKS'); }} onCancel={() => navigateTo('LOGBOOKS')} />
           : <div>No Logbook Selected</div>;
       case 'AUDIT':
         return <AuditLogView auditLogs={appState.auditLogs} />;
@@ -67,10 +79,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden bg-indigo-700 text-white p-4 flex justify-between items-center">
+      <div className="md:hidden bg-indigo-700 text-white p-4 flex justify-between items-center shadow-lg">
         <div className="flex items-center gap-2">
           <Shield size={24} />
-          <span className="font-bold tracking-tight">PharmaTrack</span>
+          <span className="font-bold tracking-tight uppercase text-sm">PharmaTrack</span>
         </div>
         <button onClick={() => setSidebarOpen(!isSidebarOpen)}>
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
@@ -87,11 +99,16 @@ const App: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+        {isRefreshing && (
+          <div className="absolute top-4 right-8 flex items-center gap-2 text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-white/80 backdrop-blur px-3 py-1 rounded-full border border-indigo-50 shadow-sm z-10 animate-pulse">
+            <Loader2 size={12} className="animate-spin" /> Synchronizing...
+          </div>
+        )}
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8 flex justify-between items-center">
+          <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
                 {currentView === 'DASHBOARD' && <Layout className="text-indigo-600" />}
                 {currentView === 'DESIGNER' && <Database className="text-indigo-600" />}
                 {currentView === 'LOGBOOKS' && <ClipboardList className="text-indigo-600" />}
@@ -100,13 +117,15 @@ const App: React.FC = () => {
                 {currentView.replace('_', ' ')}
               </h1>
               <p className="text-slate-500 text-sm mt-1">
-                Welcome back, <span className="font-semibold text-slate-700">{appState.currentUser.fullName}</span> ({appState.currentUser.role})
+                Active Session: <span className="font-semibold text-slate-700">{appState.currentUser.fullName}</span>
               </p>
             </div>
-            <div className="hidden md:flex items-center gap-4 text-xs font-mono bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-              <span className="text-green-600 font-bold underline">GxP COMPLIANT</span>
-              <span className="text-slate-400">|</span>
-              <span className="text-slate-600 uppercase">21 CFR PART 11 ENABLED</span>
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-4 text-[10px] font-mono bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-green-600 font-bold">SECURE NODE: 0x82A1</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-600 uppercase tracking-tighter">21 CFR PART 11</span>
+              </div>
             </div>
           </div>
           {renderContent()}

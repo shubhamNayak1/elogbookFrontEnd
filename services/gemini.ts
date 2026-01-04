@@ -4,6 +4,7 @@ import { LogbookEntry, LogbookTemplate, AuditRecord } from "../types";
 
 export const geminiService = {
   analyzeCompliance: async (auditLogs: AuditRecord[], entries: LogbookEntry[]) => {
+    // Initializing Gemini API with the required parameter format
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const prompt = `
       Act as a Pharmaceutical Compliance Auditor. 
@@ -21,8 +22,9 @@ export const geminiService = {
     `;
 
     try {
+      // Using gemini-3-pro-preview for complex reasoning/compliance auditing task
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: prompt,
       });
       return response.text;
@@ -33,6 +35,7 @@ export const geminiService = {
   },
 
   generateReportSummary: async (logbook: LogbookTemplate, data: LogbookEntry[]) => {
+    // Initializing Gemini API
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const prompt = `
       Summarize the data for the logbook "${logbook.name}".
@@ -44,6 +47,7 @@ export const geminiService = {
     `;
 
     try {
+      // Using gemini-3-flash-preview for basic summarization task
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,

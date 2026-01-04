@@ -2,6 +2,9 @@
 import { AppState, User, UserRole, LogbookTemplate, LogbookEntry, AuditRecord, LogbookStatus } from '../types';
 
 const STORAGE_KEY = 'pharma_track_v1';
+const NETWORK_DELAY = 600;
+
+const simulateNetworkDelay = () => new Promise(resolve => setTimeout(resolve, NETWORK_DELAY));
 
 const INITIAL_STATE: AppState = {
   currentUser: null,
@@ -17,16 +20,21 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const api = {
-  getState: (): AppState => {
+  private_getState: (): AppState => {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : INITIAL_STATE;
   },
 
-  saveState: (state: AppState) => {
+  private_saveState: (state: AppState) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   },
 
-  createAudit: (
+  getState: async (): Promise<AppState> => {
+    await simulateNetworkDelay();
+    return api.private_getState();
+  },
+
+  createAudit: async (
     action: AuditRecord['action'],
     entityType: string,
     entityId: string,
@@ -34,7 +42,7 @@ export const api = {
     newValue: any,
     reason: string
   ) => {
-    const state = api.getState();
+    const state = api.private_getState();
     const user = state.currentUser;
     if (!user) return;
 
@@ -52,30 +60,32 @@ export const api = {
     };
 
     state.auditLogs.unshift(newAudit);
-    api.saveState(state);
+    api.private_saveState(state);
   },
 
-  login: (username: string): User | null => {
+  login: async (username: string): Promise<User | null> => {
+    await simulateNetworkDelay();
     const user = MOCK_USERS.find(u => u.username === username);
     if (user) {
-      const state = api.getState();
+      const state = api.private_getState();
       state.currentUser = user;
-      api.saveState(state);
-      api.createAudit('LOGIN', 'USER', user.id, null, { username }, 'Standard Login');
+      api.private_saveState(state);
+      await api.createAudit('LOGIN', 'USER', user.id, null, { username }, 'Standard Login');
       return user;
     }
     return null;
   },
 
-  logout: () => {
-    const state = api.getState();
+  logout: async () => {
+    await simulateNetworkDelay();
+    const state = api.private_getState();
     state.currentUser = null;
-    api.saveState(state);
+    api.private_saveState(state);
   },
 
-  // Logbook Template Management
-  saveLogbook: (template: Partial<LogbookTemplate>, reason: string) => {
-    const state = api.getState();
+  saveLogbook: async (template: Partial<LogbookTemplate>, reason: string): Promise<LogbookTemplate> => {
+    await simulateNetworkDelay();
+    const state = api.private_getState();
     const isNew = !template.id;
     const id = template.id || `lb_${Date.now()}`;
     const user = state.currentUser!;
@@ -99,14 +109,14 @@ export const api = {
       state.logbooks[index] = newTemplate;
     }
 
-    api.saveState(state);
-    api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'LOGBOOK_TEMPLATE', id, oldValue, newTemplate, reason);
+    api.private_saveState(state);
+    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'LOGBOOK_TEMPLATE', id, oldValue, newTemplate, reason);
     return newTemplate;
   },
 
-  // Logbook Entry Management
-  saveEntry: (entry: Partial<LogbookEntry>, reason: string) => {
-    const state = api.getState();
+  saveEntry: async (entry: Partial<LogbookEntry>, reason: string): Promise<LogbookEntry> => {
+    await simulateNetworkDelay();
+    const state = api.private_getState();
     const isNew = !entry.id;
     const id = entry.id || `ent_${Date.now()}`;
     const user = state.currentUser!;
@@ -130,8 +140,8 @@ export const api = {
       state.entries[index] = newEntry;
     }
 
-    api.saveState(state);
-    api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'ENTRY', id, oldValue, newEntry, reason);
+    api.private_saveState(state);
+    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'ENTRY', id, oldValue, newEntry, reason);
     return newEntry;
   }
 };

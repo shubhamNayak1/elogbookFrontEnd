@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { LogbookTemplate, ColumnType, LogbookEntry } from '../types';
 import { api } from '../services/api';
-import { Save, ChevronLeft, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Save, ChevronLeft, Info, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface EntryFormProps {
   template: LogbookTemplate;
@@ -15,6 +15,7 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [reason, setReason] = useState('');
   const [showReasonModal, setShowReasonModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -33,14 +34,22 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
     }
   };
 
-  const handleFinalSave = () => {
-    if (!reason.trim()) return;
-    api.saveEntry({
-      logbookId: template.id,
-      values,
-      status: 'SUBMITTED',
-    }, reason);
-    onSave();
+  const handleFinalSave = async () => {
+    if (!reason.trim() || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      await api.saveEntry({
+        logbookId: template.id,
+        values,
+        status: 'SUBMITTED',
+      }, reason);
+      onSave();
+    } catch (err) {
+      console.error("Entry save failed", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderField = (col: any) => {
@@ -55,9 +64,9 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
               type="checkbox" 
               checked={!!value}
               onChange={(e) => setValues({ ...values, [col.key]: e.target.checked })}
-              className="w-5 h-5 rounded text-indigo-600"
+              className="w-5 h-5 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
             />
-            <span className="text-sm font-medium text-slate-700">{col.label}</span>
+            <span className="text-sm font-bold text-slate-700">{col.label}</span>
           </div>
         );
       case ColumnType.DATE:
@@ -66,7 +75,7 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
             type="datetime-local" 
             value={value}
             onChange={(e) => setValues({ ...values, [col.key]: e.target.value })}
-            className={`w-full px-4 py-3 rounded-xl border ${error ? 'border-red-500' : 'border-slate-200'}`}
+            className={`w-full px-4 py-3 rounded-xl border font-medium ${error ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
           />
         );
       case ColumnType.NUMBER:
@@ -75,7 +84,7 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
             type="number" 
             value={value}
             onChange={(e) => setValues({ ...values, [col.key]: e.target.value })}
-            className={`w-full px-4 py-3 rounded-xl border ${error ? 'border-red-500' : 'border-slate-200'}`}
+            className={`w-full px-4 py-3 rounded-xl border font-medium ${error ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
           />
         );
       default:
@@ -84,37 +93,37 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
             type="text" 
             value={value}
             onChange={(e) => setValues({ ...values, [col.key]: e.target.value })}
-            className={`w-full px-4 py-3 rounded-xl border ${error ? 'border-red-500' : 'border-slate-200'}`}
+            className={`w-full px-4 py-3 rounded-xl border font-medium ${error ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
           />
         );
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center gap-4">
-        <button onClick={onCancel} className="p-2 hover:bg-white rounded-full transition-colors">
+        <button onClick={onCancel} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-800">
           <ChevronLeft />
         </button>
         <div>
-          <h2 className="text-xl font-bold text-slate-800">{template.name}</h2>
-          <p className="text-sm text-slate-500">Record a new eLogbook entry</p>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight">{template.name}</h2>
+          <p className="text-sm text-slate-400 font-medium uppercase tracking-widest text-[10px]">Electronic Data Entry</p>
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {template.columns.map(col => (
             <div key={col.id} className={`space-y-2 ${col.type === ColumnType.BOOLEAN ? 'md:col-span-1 pt-6' : ''}`}>
               {col.type !== ColumnType.BOOLEAN && (
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
                   {col.label}
                   {col.isMandatory && <span className="text-red-500">*</span>}
                 </label>
               )}
               {renderField(col)}
               {errors[col.key] && (
-                <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider flex items-center gap-1">
+                <p className="text-[9px] text-red-500 font-black uppercase tracking-widest flex items-center gap-1 mt-1">
                   <AlertCircle size={10} /> {errors[col.key]}
                 </p>
               )}
@@ -122,53 +131,58 @@ const EntryForm: React.FC<EntryFormProps> = ({ template, onSave, onCancel }) => 
           ))}
         </div>
 
-        <div className="pt-8 border-t border-slate-100 flex justify-end gap-4">
+        <div className="pt-8 border-t border-slate-50 flex justify-end gap-4">
           <button 
+            disabled={isSubmitting}
             onClick={onCancel}
-            className="px-6 py-3 font-bold text-slate-500 hover:text-slate-800"
+            className="px-6 py-3 font-black text-xs uppercase tracking-widest text-slate-400 hover:text-slate-800"
           >
             Discard
           </button>
           <button 
+            disabled={isSubmitting}
             onClick={handleInitialSave}
-            className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+            className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all"
           >
-            <CheckCircle2 size={18} /> Submit Entry
+            <CheckCircle2 size={16} /> Submit & Authenticate
           </button>
         </div>
       </div>
 
       {/* Audit Reason Modal */}
       {showReasonModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white max-w-lg w-full rounded-3xl p-8 shadow-2xl border border-slate-100">
             <div className="flex items-center gap-3 mb-6 text-indigo-600">
-              <Info size={24} />
-              <h3 className="text-xl font-bold">Verify & Sign Entry</h3>
+              <div className="p-2 bg-indigo-50 rounded-lg"><Info size={24} /></div>
+              <h3 className="text-xl font-black tracking-tight">Certification Signature</h3>
             </div>
-            <div className="bg-slate-50 p-4 rounded-2xl mb-6 text-xs text-slate-600 leading-relaxed italic border border-slate-100">
-              "By signing this entry, I certify that the recorded information is accurate, complete, and contemporaneous to the task performed."
+            <div className="bg-slate-50 p-5 rounded-2xl mb-6 text-[11px] text-slate-500 leading-relaxed border border-slate-100">
+              <p className="font-bold text-slate-800 mb-1 uppercase tracking-tighter">Legal Declaration:</p>
+              "I confirm that this data entry accurately represents the true state of operations. I understand that this digital signature is the legal equivalent of my handwritten signature."
             </div>
-            <p className="text-slate-700 font-bold text-sm mb-2">Comment / Reason for Entry</p>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Entry Comments</label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g., Routine morning check completed..."
-              className="w-full h-24 p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none mb-6"
+              placeholder="Provide context for this entry..."
+              className="w-full h-24 p-4 rounded-2xl border border-slate-100 bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none resize-none mb-6 text-sm font-medium"
             />
             <div className="flex gap-4">
               <button 
+                disabled={isSubmitting}
                 onClick={() => setShowReasonModal(false)}
-                className="flex-1 py-4 font-bold text-slate-500 hover:text-slate-700"
+                className="flex-1 py-4 font-black text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
               >
-                Go Back
+                Revision
               </button>
               <button 
-                disabled={!reason.trim()}
+                disabled={!reason.trim() || isSubmitting}
                 onClick={handleFinalSave}
-                className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-200 transition-all"
+                className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:bg-slate-100 transition-all flex items-center justify-center gap-2"
               >
-                Confirm Signature
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Apply Signature
               </button>
             </div>
           </div>
