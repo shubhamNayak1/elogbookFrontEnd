@@ -36,7 +36,8 @@ export interface LogbookColumn {
   isMandatory: boolean;
   options?: string[]; // For DROPDOWN
   displayOrder: number;
-  isSystemManaged?: boolean; // New: indicates a field that cannot be edited or deleted
+  isSystemManaged?: boolean;
+  groupName?: string; // New: optional grouping label
 }
 
 export interface LogbookTemplate {

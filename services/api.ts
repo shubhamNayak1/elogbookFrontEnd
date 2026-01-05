@@ -1,189 +1,217 @@
 
-import { AppState, User, UserRole, LogbookTemplate, LogbookEntry, AuditRecord, LogbookStatus } from '../types';
+import { AppState, User, UserRole, LogbookTemplate, LogbookEntry, AuditRecord, LogbookStatus, ColumnType } from '../types';
 
-const STORAGE_KEY = 'pharma_track_v1';
-const NETWORK_DELAY = 600;
-
-const simulateNetworkDelay = () => new Promise(resolve => setTimeout(resolve, NETWORK_DELAY));
-
-// Mock Users for initialization
-const INITIAL_USERS: User[] = [
-  { id: 'u1', username: 'admin', role: UserRole.ADMIN, fullName: 'System Administrator', createdAt: new Date().toISOString() },
-  { id: 'u2', username: 'jdoe', role: UserRole.USER, fullName: 'John Doe (Analyst)', createdAt: new Date().toISOString() }
-];
+const STORAGE_KEY = 'pharma_track_v1_standalone';
 
 const INITIAL_STATE: AppState = {
   currentUser: null,
-  users: INITIAL_USERS,
+  users: [
+    { id: 'u1', username: 'admin', role: UserRole.ADMIN, fullName: 'System Administrator', createdAt: new Date().toISOString() },
+    { id: 'u2', username: 'operator', role: UserRole.USER, fullName: 'Senior Technician', createdAt: new Date().toISOString() }
+  ],
   logbooks: [],
   entries: [],
-  auditLogs: []
+  auditLogs: [
+    {
+      id: 'audit_init',
+      entityType: 'SYSTEM',
+      entityId: 'root',
+      action: 'CREATE',
+      oldValue: null,
+      newValue: 'System Initialized',
+      userId: 'system',
+      username: 'SYSTEM',
+      timestamp: new Date().toISOString(),
+      reason: 'Initial system provisioning'
+    }
+  ]
 };
 
+// Utility to load/save state to localStorage
+const loadState = (): AppState => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return INITIAL_STATE;
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return INITIAL_STATE;
+  }
+};
+
+const saveState = (state: AppState) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+};
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const api = {
-  private_getState: (): AppState => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return INITIAL_STATE;
-    const parsed = JSON.parse(data);
-    // Ensure users array exists in migration from older state
-    if (!parsed.users) parsed.users = INITIAL_USERS;
-    return parsed;
-  },
-
-  private_saveState: (state: AppState) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  },
-
   getState: async (): Promise<AppState> => {
-    await simulateNetworkDelay();
-    return api.private_getState();
+    await delay(400); // Simulate network latency
+    const state = loadState();
+    const currentUserStr = localStorage.getItem('pharma_user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+    return { ...state, currentUser };
   },
 
   getUsers: async (): Promise<User[]> => {
-    await simulateNetworkDelay();
-    return api.private_getState().users;
-  },
-
-  createAudit: async (
-    action: AuditRecord['action'],
-    entityType: string,
-    entityId: string,
-    oldValue: any,
-    newValue: any,
-    reason: string
-  ) => {
-    const state = api.private_getState();
-    const user = state.currentUser;
-    if (!user) return;
-
-    const newAudit: AuditRecord = {
-      id: `audit_${Date.now()}`,
-      entityType,
-      entityId,
-      action,
-      oldValue,
-      newValue,
-      userId: user.id,
-      username: user.username,
-      timestamp: new Date().toISOString(),
-      reason
-    };
-
-    state.auditLogs.unshift(newAudit);
-    api.private_saveState(state);
+    const state = loadState();
+    return state.users;
   },
 
   login: async (username: string): Promise<User | null> => {
-    await simulateNetworkDelay();
-    const state = api.private_getState();
+    await delay(600);
+    const state = loadState();
     const user = state.users.find(u => u.username === username);
     if (user) {
-      state.currentUser = user;
-      api.private_saveState(state);
-      await api.createAudit('LOGIN', 'USER', user.id, null, { username }, 'Standard Login');
+      localStorage.setItem('pharma_user', JSON.stringify(user));
+      
+      // Audit Login
+      const audit: AuditRecord = {
+        id: `audit_${Date.now()}`,
+        entityType: 'USER',
+        entityId: user.id,
+        action: 'LOGIN',
+        oldValue: null,
+        newValue: `User ${user.username} logged in`,
+        userId: user.id,
+        username: user.username,
+        timestamp: new Date().toISOString(),
+        reason: 'User authentication'
+      };
+      state.auditLogs.unshift(audit);
+      saveState(state);
+      
       return user;
     }
     return null;
   },
 
   logout: async () => {
-    await simulateNetworkDelay();
-    const state = api.private_getState();
-    state.currentUser = null;
-    api.private_saveState(state);
+    localStorage.removeItem('pharma_user');
   },
 
   saveUser: async (userData: Partial<User>, reason: string): Promise<User> => {
-    await simulateNetworkDelay();
-    const state = api.private_getState();
-    const isNew = !userData.id;
-    const id = userData.id || `u_${Date.now()}`;
+    await delay(500);
+    const state = loadState();
+    const currentUserStr = localStorage.getItem('pharma_user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : { id: 'anon', username: 'anonymous' };
 
     const newUser: User = {
-      id,
-      username: userData.username!,
-      fullName: userData.fullName!,
+      id: `u_${Date.now()}`,
+      username: userData.username || 'unknown',
+      fullName: userData.fullName || 'New User',
       role: userData.role || UserRole.USER,
-      createdAt: userData.createdAt || new Date().toISOString()
+      createdAt: new Date().toISOString()
     };
 
-    let oldValue = null;
-    if (isNew) {
-      // Check if username already exists
-      if (state.users.some(u => u.username === newUser.username)) {
-        throw new Error('Username already exists in system');
-      }
-      state.users.push(newUser);
-    } else {
-      const index = state.users.findIndex(u => u.id === id);
-      oldValue = { ...state.users[index] };
-      state.users[index] = newUser;
-    }
-
-    api.private_saveState(state);
-    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'USER_ACCOUNT', id, oldValue, newUser, reason);
+    state.users.push(newUser);
+    
+    // Audit Creation
+    const audit: AuditRecord = {
+      id: `audit_${Date.now()}`,
+      entityType: 'USER',
+      entityId: newUser.id,
+      action: 'CREATE',
+      oldValue: null,
+      newValue: newUser,
+      userId: currentUser.id,
+      username: currentUser.username,
+      timestamp: new Date().toISOString(),
+      reason
+    };
+    state.auditLogs.unshift(audit);
+    
+    saveState(state);
     return newUser;
   },
 
   saveLogbook: async (template: Partial<LogbookTemplate>, reason: string): Promise<LogbookTemplate> => {
-    await simulateNetworkDelay();
-    const state = api.private_getState();
-    const isNew = !template.id;
-    const id = template.id || `lb_${Date.now()}`;
-    const user = state.currentUser!;
+    await delay(800);
+    const state = loadState();
+    const currentUserStr = localStorage.getItem('pharma_user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : { id: 'anon', username: 'anonymous' };
 
-    const newTemplate: LogbookTemplate = {
-      id,
-      name: template.name || 'New Logbook',
-      description: template.description || '',
-      status: template.status || LogbookStatus.DRAFT,
-      columns: template.columns || [],
-      createdAt: template.createdAt || new Date().toISOString(),
-      createdBy: user.username
-    };
+    let resultTemplate: LogbookTemplate;
 
-    let oldValue = null;
-    if (isNew) {
-      state.logbooks.push(newTemplate);
+    if (template.id) {
+      const idx = state.logbooks.findIndex(l => l.id === template.id);
+      const oldVal = { ...state.logbooks[idx] };
+      state.logbooks[idx] = { ...state.logbooks[idx], ...template } as LogbookTemplate;
+      resultTemplate = state.logbooks[idx];
+      
+      state.auditLogs.unshift({
+        id: `audit_${Date.now()}`,
+        entityType: 'LOGBOOK_TEMPLATE',
+        entityId: template.id,
+        action: 'UPDATE',
+        oldValue: oldVal,
+        newValue: resultTemplate,
+        userId: currentUser.id,
+        username: currentUser.username,
+        timestamp: new Date().toISOString(),
+        reason
+      });
     } else {
-      const index = state.logbooks.findIndex(l => l.id === id);
-      oldValue = { ...state.logbooks[index] };
-      state.logbooks[index] = newTemplate;
+      resultTemplate = {
+        ...template,
+        id: `lb_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser.username,
+        status: template.status || LogbookStatus.ACTIVE
+      } as LogbookTemplate;
+      
+      state.logbooks.push(resultTemplate);
+      
+      state.auditLogs.unshift({
+        id: `audit_${Date.now()}`,
+        entityType: 'LOGBOOK_TEMPLATE',
+        entityId: resultTemplate.id,
+        action: 'CREATE',
+        oldValue: null,
+        newValue: resultTemplate,
+        userId: currentUser.id,
+        username: currentUser.username,
+        timestamp: new Date().toISOString(),
+        reason
+      });
     }
 
-    api.private_saveState(state);
-    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'LOGBOOK_TEMPLATE', id, oldValue, newTemplate, reason);
-    return newTemplate;
+    saveState(state);
+    return resultTemplate;
   },
 
   saveEntry: async (entry: Partial<LogbookEntry>, reason: string): Promise<LogbookEntry> => {
-    await simulateNetworkDelay();
-    const state = api.private_getState();
-    const isNew = !entry.id;
-    const id = entry.id || `ent_${Date.now()}`;
-    const user = state.currentUser!;
+    await delay(1000);
+    const state = loadState();
+    const currentUserStr = localStorage.getItem('pharma_user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : { id: 'anon', username: 'anonymous' };
 
     const newEntry: LogbookEntry = {
-      id,
-      logbookId: entry.logbookId!,
+      id: `ent_${Date.now()}`,
+      logbookId: entry.logbookId || '',
       values: entry.values || {},
-      status: entry.status || 'SUBMITTED',
-      createdAt: entry.createdAt || new Date().toISOString(),
-      createdBy: user.username,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.fullName,
+      status: 'SUBMITTED',
       reason
     };
 
-    let oldValue = null;
-    if (isNew) {
-      state.entries.push(newEntry);
-    } else {
-      const index = state.entries.findIndex(e => e.id === id);
-      oldValue = { ...state.entries[index] };
-      state.entries[index] = newEntry;
-    }
+    state.entries.unshift(newEntry);
+    
+    state.auditLogs.unshift({
+      id: `audit_${Date.now()}`,
+      entityType: 'LOGBOOK_ENTRY',
+      entityId: newEntry.id,
+      action: 'CREATE',
+      oldValue: null,
+      newValue: newEntry,
+      userId: currentUser.id,
+      username: currentUser.username,
+      timestamp: new Date().toISOString(),
+      reason
+    });
 
-    api.private_saveState(state);
-    await api.createAudit(isNew ? 'CREATE' : 'UPDATE', 'ENTRY', id, oldValue, newEntry, reason);
+    saveState(state);
     return newEntry;
   }
 };

@@ -5,7 +5,7 @@ import { LogbookEntry, LogbookTemplate, AuditRecord } from "../types";
 export const geminiService = {
   analyzeCompliance: async (auditLogs: AuditRecord[], entries: LogbookEntry[]) => {
     // Initializing Gemini API with the required parameter format
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `
       Act as a Pharmaceutical Compliance Auditor. 
       Analyze the following system data for 21 CFR Part 11 and ALCOA+ compliance.
@@ -36,7 +36,7 @@ export const geminiService = {
 
   generateReportSummary: async (logbook: LogbookTemplate, data: LogbookEntry[]) => {
     // Initializing Gemini API
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `
       Summarize the data for the logbook "${logbook.name}".
       Number of entries: ${data.length}
